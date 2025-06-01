@@ -1,0 +1,202 @@
+<!-- register.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Register</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+</head>
+<body>
+  <h2>Register</h2>
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
+  <select id="role">
+    <option value="admin">Admin</option>
+    <option value="user">User</option>
+  </select>
+  <button onclick="register()">Sign Up</button>
+  <script>
+    const firebaseConfig = { /* Your Firebase Config */ };
+    firebase.initializeApp(firebaseConfig);
+
+    function register() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const role = document.getElementById('role').value;
+
+      firebase.auth().createUserWithEmailAndPassword(email, password)
+        .then(userCredential => {
+          const user = userCredential.user;
+          return firebase.database().ref('users/' + user.uid).set({
+            email: user.email,
+            role: role
+          });
+        })
+        .then(() => {
+          alert('Registration successful!');
+          window.location.href = 'login.html';
+        })
+        .catch(error => alert(error.message));
+    }
+  </script>
+</body>
+</html>
+
+<!-- login.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+</head>
+<body>
+  <h2>Login</h2>
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
+  <button onclick="login()">Login</button>
+  <script>
+    const firebaseConfig = { /* Your Firebase Config */ };
+    firebase.initializeApp(firebaseConfig);
+
+    function login() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      firebase.auth().signInWithEmailAndPassword(email, password)
+        .then(userCredential => {
+          const user = userCredential.user;
+          return firebase.database().ref('users/' + user.uid).once('value');
+        })
+        .then(snapshot => {
+          const role = snapshot.val().role;
+          sessionStorage.setItem('role', role);
+
+          if (role === 'admin') {
+            window.location.href = 'admin-dashboard.html';
+          } else {
+            window.location.href = 'user-dashboard.html';
+          }
+        })
+        .catch(() => alert("Incorrect email or password!"));
+    }
+  </script>
+</body>
+</html>
+
+<!-- admin-dashboard.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+</head>
+<body onload="checkAccess()">
+  <h2>Admin Dashboard</h2>
+  <div>
+    <input type="text" id="title" placeholder="Title">
+    <input type="number" id="price" placeholder="Price">
+    <input type="text" id="image" placeholder="Image URL">
+    <button onclick="addProduct()">Add Product</button>
+  </div>
+  <div id="productList"></div>
+  <script>
+    const firebaseConfig = { /* Your Firebase Config */ };
+    firebase.initializeApp(firebaseConfig);
+
+    function checkAccess() {
+      const role = sessionStorage.getItem('role');
+      if (role !== 'admin') {
+        window.location.href = 'user-dashboard.html';
+      }
+      fetchProducts();
+    }
+
+    function addProduct() {
+      const title = document.getElementById('title').value;
+      const price = document.getElementById('price').value;
+      const image = document.getElementById('image').value;
+
+      const newProductRef = firebase.database().ref('products').push();
+      newProductRef.set({ title, price, image });
+    }
+
+    function fetchProducts() {
+      firebase.database().ref('products').on('value', snapshot => {
+        const productList = document.getElementById('productList');
+        productList.innerHTML = '';
+        snapshot.forEach(child => {
+          const product = child.val();
+          const id = child.key;
+          productList.innerHTML += `
+            <div>
+              <h3>${product.title}</h3>
+              <p>Price: $${product.price}</p>
+              <img src="${product.image}" width="100"><br>
+              <button onclick="editProduct('${id}')">Edit</button>
+              <button onclick="deleteProduct('${id}')">Delete</button>
+            </div>
+          `;
+        });
+      });
+    }
+
+    function deleteProduct(id) {
+      firebase.database().ref('products/' + id).remove();
+    }
+
+    function editProduct(id) {
+      const title = prompt("Enter new title:");
+      const price = prompt("Enter new price:");
+      const image = prompt("Enter new image URL:");
+      firebase.database().ref('products/' + id).update({ title, price, image });
+    }
+  </script>
+</body>
+</html>
+
+<!-- user-dashboard.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>User Dashboard</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+</head>
+<body onload="checkAccess()">
+  <h2>User Dashboard</h2>
+  <div id="productList"></div>
+  <script>
+    const firebaseConfig = { /* Your Firebase Config */ };
+    firebase.initializeApp(firebaseConfig);
+
+    function checkAccess() {
+      const role = sessionStorage.getItem('role');
+      if (role !== 'user') {
+        window.location.href = 'admin-dashboard.html';
+      }
+      fetchProducts();
+    }
+
+    function fetchProducts() {
+      firebase.database().ref('products').on('value', snapshot => {
+        const productList = document.getElementById('productList');
+        productList.innerHTML = '';
+        snapshot.forEach(child => {
+          const product = child.val();
+          productList.innerHTML += `
+            <div>
+              <h3>${product.title}</h3>
+              <p>Price: $${product.price}</p>
+              <img src="${product.image}" width="100">
+            </div>
+          `;
+        });
+      });
+    }
+  </script>
+</body>
+</html>
